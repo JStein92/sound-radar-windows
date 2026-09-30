@@ -1,0 +1,74 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!--
+    Per-user install: no admin prompt, installs to %LocalAppData%\Programs\SoundRadar, adds a
+    Start menu shortcut and an Apps & features entry, then launches SoundRadar.
+    UpgradeCode must never change - it's how new versions replace old ones.
+  -->
+  <Package Name="SoundRadar"
+           Manufacturer="SoundRadar"
+           Version="!(bind.FileVersion.SoundRadarExe)"
+           UpgradeCode="F3CACC7C-F56B-4EA5-A43E-F6A9132826A1"
+           Scope="perUser"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SoundRadar is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="SoundRadarIcon" SourceFile="$(var.AssetsDir)icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SoundRadarIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPCOMMENTS" Value="Left/right sound bars on the edges of your screen" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="SoundRadar" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!-- Files in a per-user folder need an HKCU value as their key path (ICE38). -->
+    <ComponentGroup Id="AppComponents" Directory="INSTALLFOLDER">
+      <Component Id="AppExe" Guid="380A506B-B37C-43E0-9F16-FC95EAA40AAC">
+        <File Id="SoundRadarExe" Source="$(var.AppDir)SoundRadar.exe" />
+        <RegistryValue Root="HKCU" Key="Software\SoundRadar" Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+      </Component>
+      <Component Id="AppConfig" Guid="71D580AE-6155-49AB-83A8-512C8FC91730">
+        <File Id="SoundRadarExeConfig" Source="$(var.AppDir)SoundRadar.exe.config" />
+        <RegistryValue Root="HKCU" Key="Software\SoundRadar" Name="Config" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <!-- MIT asks for the license to travel with copies of the software. -->
+      <Component Id="License" Guid="75E4A738-1923-426B-AD76-4A00BD46A733">
+        <File Id="LicenseTxt" Source="$(var.LicenseFile)" Name="LICENSE.txt" />
+        <RegistryValue Root="HKCU" Key="Software\SoundRadar" Name="License" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
+        <Shortcut Id="StartMenuShortcut" Name="SoundRadar" Description="Left/right sound bars on the edges of your screen"
+                  Target="[INSTALLFOLDER]SoundRadar.exe" WorkingDirectory="INSTALLFOLDER" Icon="SoundRadarIcon" />
+        <RegistryValue Root="HKCU" Key="Software\SoundRadar" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="SoundRadar">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <!-- Close a running copy before files are replaced/removed (avoids "files in use"),
+         and on uninstall also remove its "Start with Windows" entry. -->
+    <CustomAction Id="QuitRunningCopy" Directory="INSTALLFOLDER" Execute="immediate" Return="ignore"
+                  ExeCommand="&quot;[INSTALLFOLDER]SoundRadar.exe&quot; --quit" />
+    <CustomAction Id="UninstallCleanup" Directory="INSTALLFOLDER" Execute="immediate" Return="ignore"
+                  ExeCommand="&quot;[INSTALLFOLDER]SoundRadar.exe&quot; --uninstall" />
+    <!-- Start SoundRadar when a (non-silent) install or upgrade finishes. -->
+    <CustomAction Id="LaunchSoundRadar" Directory="INSTALLFOLDER" Execute="immediate" Return="asyncNoWait"
+                  ExeCommand="&quot;[INSTALLFOLDER]SoundRadar.exe&quot;" />
+
+    <InstallExecuteSequence>
+      <Custom Action="QuitRunningCopy" Before="InstallValidate" Condition="WIX_UPGRADE_DETECTED AND NOT (REMOVE~=&quot;ALL&quot;)" />
+      <Custom Action="UninstallCleanup" Before="InstallValidate" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="LaunchSoundRadar" After="InstallFinalize" Condition="NOT Installed AND NOT (REMOVE~=&quot;ALL&quot;) AND UILevel &gt; 2" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

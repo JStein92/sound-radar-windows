@@ -1,0 +1,10 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!-- Build the app first (see build.ps1); this packages its Release output. -->
+  <PropertyGroup>
+    <OutputName>SoundRadar-Setup</OutputName>
+    <AppDir>$(MSBuildThisFileDirectory)..\src\SoundRadar\bin\Release\net48\</AppDir>
+    <DefineConstants>AppDir=$(AppDir);AssetsDir=$(MSBuildThisFileDirectory)..\src\SoundRadar\Assets\;LicenseFile=$(MSBuildThisFileDirectory)..\LICENSE</DefineConstants>
+    <!-- ICE91 flags files in per-user folders for per-machine installs; this package is per-user only. -->
+    <SuppressIces>ICE91</SuppressIces>
+  </PropertyGroup>
+</Project>

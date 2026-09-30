@@ -1,0 +1,23 @@
+<Window x:Class="SoundRadar.UI.HotkeyDialog" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SoundRadar - Hotkeys" Width="400" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource WindowBg}"
+        FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+    <StackPanel Margin="16,14,16,14">
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                   Text="Click a field and press the combination you want (e.g. Ctrl+Shift+F9). Backspace clears it. These work while a game has focus." />
+        <Grid x:Name="Rows" />
+        <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button Content="Clear all" Click="OnClearAll" />
+            <Button Grid.Column="2" Content="Cancel" IsCancel="True" />
+            <Button Grid.Column="3" Content="Save" Margin="8,0,0,0" IsDefault="True" Click="OnSave" />
+        </Grid>
+    </StackPanel>
+</Window>
