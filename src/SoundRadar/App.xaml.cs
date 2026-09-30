@@ -12,9 +12,14 @@ namespace SoundRadar
 {
     public partial class App : Application
     {
-        private const string InstanceMutexName = @"Local\SoundRadar.SingleInstance";
-        private const string ShowSignalName = @"Local\SoundRadar.ShowSettings";
-        private const string QuitSignalName = @"Local\SoundRadar.Quit";
+        // One running copy per settings folder. Normally that's the single %APPDATA% folder;
+        // a SOUNDRADAR_CONFIG_DIR override (used by tests) gets its own set of names.
+        private static readonly string InstanceSuffix = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SOUNDRADAR_CONFIG_DIR"))
+            ? ""
+            : "." + ConfigStore.Directory.ToLowerInvariant().GetHashCode().ToString("X8");
+        private static readonly string InstanceMutexName = @"Local\SoundRadar.SingleInstance" + InstanceSuffix;
+        private static readonly string ShowSignalName = @"Local\SoundRadar.ShowSettings" + InstanceSuffix;
+        private static readonly string QuitSignalName = @"Local\SoundRadar.Quit" + InstanceSuffix;
         // A property, not a static field: "pack://" only parses once WPF's Application has initialized.
         private static Uri IconUri => new Uri("pack://application:,,,/Assets/icon.ico");
 

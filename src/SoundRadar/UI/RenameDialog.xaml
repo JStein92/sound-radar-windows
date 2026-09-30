@@ -1,0 +1,16 @@
+<Window x:Class="SoundRadar.UI.RenameDialog" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Rename profile" Width="340" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource WindowBg}"
+        FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+    <StackPanel Margin="16,14,16,14">
+        <TextBlock Text="Profile name" Margin="0,0,0,6" />
+        <TextBox x:Name="NameBox" />
+        <TextBlock x:Name="HintText" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" IsCancel="True" />
+            <Button Content="Save" Margin="8,0,0,0" IsDefault="True" Click="OnSave" />
+        </StackPanel>
+    </StackPanel>
+</Window>

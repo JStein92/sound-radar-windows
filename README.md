@@ -48,16 +48,22 @@ the tray icon brings it back.
   - **Boost quiet sounds** makes quiet sounds like footsteps register next to loud ones.
   - **Radar** lights only the louder side, by how much louder it is.
 - **Look (saved per profile):**
-  - **Color:** 9 color schemes.
+  - **Color:** 19 schemes.
+    - The original 9 from the LED version.
+    - 10 pride flags: Rainbow Pride, Transgender, Bisexual, Pansexual, Lesbian,
+      Nonbinary, Asexual, Aromantic, Genderfluid and Agender.
+  - **Frequency:** the Frequency color changes with pitch. Pick from six palettes:
+    Classic, Spectrum, Heat, Ocean, Cool to warm and Neon.
   - **Mode:** fill from the bottom, fill from the top, or grow from the center.
   - **Segments:** an LED-strip look, or 0 for a smooth bar.
   - **Brightness.**
-  - **Background:** a dark backing so the bars show on bright screens.
+  - **Background:** a backing in any color, so the bars show on bright screens.
 - **Placement:**
   - **Monitor:** a specific display, or **All displays** to put the bars on the outer
     edges of a multi-monitor setup.
-  - **Width, length, and gap** from the screen edge.
-- **Profiles:** 9 of them.
+  - **Width.**
+  - **Top, bottom and side gaps**, set separately (e.g. to keep clear of the taskbar).
+- **Profiles:** 9 of them, and you can rename each one.
 - **Hotkeys:** optional, and they work while a game has focus.
 - **Start with Windows:** a checkbox at the bottom of the settings window.
 

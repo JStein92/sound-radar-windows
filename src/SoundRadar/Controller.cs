@@ -33,6 +33,7 @@ namespace SoundRadar
         private readonly ControlPanel _panel;
         private Forms.NotifyIcon _tray;
         private Forms.ToolStripMenuItem _pauseItem;
+        private readonly string[] _profileNames = new string[ConfigStore.ProfileCount];
         private double _lastFrame;
         private bool _trayHintShown;
         private bool _disposed;
@@ -40,7 +41,11 @@ namespace SoundRadar
         public Controller(bool startHidden)
         {
             Settings = ConfigStore.LoadSettings();
+            var primary = Forms.Screen.PrimaryScreen.Bounds;
+            Settings.MigrateLength((int)Math.Round(primary.Height / Interop.Native.MonitorScale(primary)));
             Profile = ConfigStore.LoadProfile(Settings.CurrentProfile);
+            for (var i = 0; i < _profileNames.Length; i++)
+                _profileNames[i] = i == Settings.CurrentProfile ? Profile.Name : ConfigStore.LoadProfile(i).Name;
 
             _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
             _saveTimer.Tick += (s, e) => Save();
@@ -89,10 +94,15 @@ namespace SoundRadar
                 bar.Segments = p.Segments;
                 bar.Opacity = p.Brightness / 100.0;
                 bar.BackgroundOpacity = p.BackgroundOpacity / 100.0;
+                bar.BackgroundColor = Rgb.FromHex(p.BackgroundColor);
                 if (bar.Visible)
                     bar.Render();
             }
+            if (_tray != null)
+                _tray.Text = Truncate("SoundRadar - " + ProfileDisplayName(Settings.CurrentProfile), 63);
         }
+
+        private static string Truncate(string text, int max) => text.Length <= max ? text : text.Substring(0, max);
 
         /// <summary>(left bar's screen, right bar's screen).</summary>
         private (Forms.Screen left, Forms.Screen right) BarScreens()
@@ -112,8 +122,8 @@ namespace SoundRadar
         private void ApplyLayout()
         {
             var (left, right) = BarScreens();
-            _bars[0].Place(left.Bounds, Settings.BarWidth, Settings.BarLength, Settings.EdgeMargin);
-            _bars[1].Place(right.Bounds, Settings.BarWidth, Settings.BarLength, Settings.EdgeMargin);
+            _bars[0].Place(left.Bounds, Settings.BarWidth, Settings.TopMargin, Settings.BottomMargin, Settings.EdgeMargin);
+            _bars[1].Place(right.Bounds, Settings.BarWidth, Settings.TopMargin, Settings.BottomMargin, Settings.EdgeMargin);
             foreach (var bar in _bars)
                 if (bar.Visible)
                     bar.Render();
@@ -159,6 +169,7 @@ namespace SoundRadar
                 Profile.Sensitivity = Engine.Sensitivity;
 
             var useFrequency = Profile.Color == ColorSchemes.Frequency;
+            var palette = FrequencyPalettes.Get(Profile.FrequencyPalette);
             var targets = new[] { peakLeft, peakRight };
             var freqs = new[] { freqLeft, freqRight };
             for (var i = 0; i < 2; i++)
@@ -167,7 +178,7 @@ namespace SoundRadar
                 var alpha = 1 - Math.Pow(1 - rate, dt * ReferenceRate);
                 _levels[i] += alpha * (targets[i] - _levels[i]);
                 _bars[i].Level = _levels[i];
-                _bars[i].SolidColor = useFrequency ? _frequencyColors[i].Update(freqs[i], dt) : (Rgb?)null;
+                _bars[i].SolidColor = useFrequency ? _frequencyColors[i].Update(freqs[i], dt, palette) : (Rgb?)null;
                 _bars[i].Render();
             }
         }
@@ -205,6 +216,28 @@ namespace SoundRadar
             Engine.ResetAutoSensitivity();
             ApplyProfile();
             ScheduleSave();
+            _panel.Sync();
+        }
+
+        public string ProfileDisplayName(int index) =>
+            string.IsNullOrWhiteSpace(_profileNames[index]) ? $"Profile {index + 1}" : _profileNames[index];
+
+        public void RenameProfile(int index, string name)
+        {
+            if (index == Settings.CurrentProfile)
+            {
+                ChangeProfile(p => p.Name = name);
+                _profileNames[index] = Profile.Name;
+            }
+            else
+            {
+                var profile = ConfigStore.LoadProfile(index);
+                profile.Name = name;
+                profile.Normalize();
+                ConfigStore.SaveProfile(index, profile);
+                _profileNames[index] = profile.Name;
+            }
+            ApplyProfile(); // refresh the tray tooltip
             _panel.Sync();
         }
 
@@ -296,7 +329,7 @@ namespace SoundRadar
             _tray = new Forms.NotifyIcon
             {
                 Icon = App.LoadIcon(Forms.SystemInformation.SmallIconSize.Width),
-                Text = "SoundRadar",
+                Text = Truncate("SoundRadar - " + ProfileDisplayName(Settings.CurrentProfile), 63),
                 ContextMenuStrip = menu,
                 Visible = true,
             };

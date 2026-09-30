@@ -54,11 +54,16 @@ namespace SoundRadar.Core
         [DataMember(Name = "color")] public string Color;
         [DataMember(Name = "show_difference")] public bool ShowDifference;
         [DataMember(Name = "brightness")] public int Brightness; // bar opacity, percent
-        [DataMember(Name = "background_opacity")] public int BackgroundOpacity; // dark backing, percent
+        [DataMember(Name = "background_opacity")] public int BackgroundOpacity; // backing behind each bar, percent
+        [DataMember(Name = "background_color")] public string BackgroundColor; // "#RRGGBB"
         [DataMember(Name = "sensitivity")] public double Sensitivity; // 0-100 log curve, 25 = unity
         [DataMember(Name = "auto_sensitivity")] public bool AutoSensitivity;
         [DataMember(Name = "quiet_boost")] public bool QuietBoost; // decibel scale so footsteps still show
         [DataMember(Name = "segments")] public int Segments; // 0 = smooth bar
+        [DataMember(Name = "frequency_palette")] public string FrequencyPalette; // used by the Frequency color
+        [DataMember(Name = "name")] public string Name; // "" = "Profile N"
+
+        public const int MaxNameLength = 40;
 
         public Profile() => SetDefaults();
 
@@ -72,10 +77,13 @@ namespace SoundRadar.Core
             ShowDifference = false;
             Brightness = 90;
             BackgroundOpacity = 0;
+            BackgroundColor = "#000000";
             Sensitivity = 25;
             AutoSensitivity = true;
             QuietBoost = false;
             Segments = 21;
+            FrequencyPalette = FrequencyPalettes.Names[0];
+            Name = "";
         }
 
         public void Normalize()
@@ -84,10 +92,16 @@ namespace SoundRadar.Core
                 Mode = Modes.All[0];
             if (!ColorSchemes.Names.Contains(Color))
                 Color = ColorSchemes.Names[0];
+            if (!FrequencyPalettes.Names.Contains(FrequencyPalette))
+                FrequencyPalette = FrequencyPalettes.Names[0];
+            BackgroundColor = Rgb.TryParseHex(BackgroundColor, out var background) ? background.ToHex() : "#000000";
             Brightness = Math.Max(5, Math.Min(100, Brightness));
             BackgroundOpacity = Math.Max(0, Math.Min(100, BackgroundOpacity));
             Sensitivity = Math.Max(0, Math.Min(100, Sensitivity));
             Segments = Math.Max(0, Math.Min(80, Segments));
+            Name = (Name ?? "").Trim();
+            if (Name.Length > MaxNameLength)
+                Name = Name.Substring(0, MaxNameLength);
         }
     }
 
@@ -102,9 +116,17 @@ namespace SoundRadar.Core
         [DataMember(Name = "source_app")] public string SourceApp; // exe name, e.g. "cs2.exe"
         [DataMember(Name = "monitor")] public string Monitor; // display device name, AllMonitors, or "" = primary
         [DataMember(Name = "bar_width")] public int BarWidth; // px at 100% scaling
-        [DataMember(Name = "bar_length")] public int BarLength; // percent of screen height
-        [DataMember(Name = "edge_margin")] public int EdgeMargin; // px from the screen edge
+        [DataMember(Name = "top_margin")] public int TopMargin; // px from the top of the screen at 100% scaling
+        [DataMember(Name = "bottom_margin")] public int BottomMargin; // px from the bottom
+        [DataMember(Name = "edge_margin")] public int EdgeMargin; // px from the side of the screen
         [DataMember(Name = "hotkeys")] public Dictionary<string, string> Hotkeys;
+
+        // Older versions stored a single centered length as a percent of screen height. Read
+        // it once to seed the top/bottom gaps (see MigrateLength); never written back.
+        [DataMember(Name = "bar_length", EmitDefaultValue = false)] public int LegacyBarLength;
+
+        public const int MaxVerticalMargin = 800;
+        public const int Unset = -1;
 
         public AppSettings() => SetDefaults();
 
@@ -119,9 +141,30 @@ namespace SoundRadar.Core
             SourceApp = "";
             Monitor = "";
             BarWidth = 12;
-            BarLength = 70;
+            TopMargin = Unset;
+            BottomMargin = Unset;
+            LegacyBarLength = 0;
             EdgeMargin = 0;
             Hotkeys = HotkeyActions.Defaults();
+        }
+
+        /// <summary>
+        /// Fill in gaps that were never set: from an old centered length if there is one,
+        /// otherwise a sensible default. Needs the (100%-scale) height of the primary screen.
+        /// </summary>
+        public void MigrateLength(int screenHeight)
+        {
+            if (TopMargin != Unset && BottomMargin != Unset)
+                return;
+            var gap = LegacyBarLength > 0
+                ? (int)Math.Round(screenHeight * (100 - Math.Max(10, Math.Min(100, LegacyBarLength))) / 200.0)
+                : 180;
+            if (TopMargin == Unset)
+                TopMargin = gap;
+            if (BottomMargin == Unset)
+                BottomMargin = gap;
+            LegacyBarLength = 0;
+            Normalize();
         }
 
         public void Normalize()
@@ -132,7 +175,10 @@ namespace SoundRadar.Core
             SourceApp = SourceApp ?? "";
             Monitor = Monitor ?? "";
             BarWidth = Math.Max(2, Math.Min(80, BarWidth));
-            BarLength = Math.Max(10, Math.Min(100, BarLength));
+            if (TopMargin != Unset)
+                TopMargin = Math.Max(0, Math.Min(MaxVerticalMargin, TopMargin));
+            if (BottomMargin != Unset)
+                BottomMargin = Math.Max(0, Math.Min(MaxVerticalMargin, BottomMargin));
             EdgeMargin = Math.Max(0, Math.Min(300, EdgeMargin));
             // Pick up actions added after the file was written. Hotkeys from the Python
             // version use a different syntax; ones that don't parse are simply ignored.

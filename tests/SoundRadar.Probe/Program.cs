@@ -72,6 +72,39 @@ namespace SoundRadar.Probe
             Check(Math.Abs(AudioEngine.SensitivityForGain(AudioEngine.SensitivityMultiplier(63)) - 63) < 1e-6, "gain <-> sensitivity round trip");
             Check(Math.Abs(AudioEngine.DecibelScale(1) - 1) < 1e-9 && AudioEngine.DecibelScale(0.0056) < 0.01, "decibel scale spans ~45 dB");
 
+            Console.WriteLine("Colors");
+            var trans = ColorSchemes.Get("Transgender");
+            Check(trans.IsFlag && trans.Gradient(0).ToHex() == "#5BCEFA" && trans.Gradient(128).ToHex() == "#FFFFFF" && trans.Gradient(255).ToHex() == "#5BCEFA",
+                "Transgender: blue / pink / white / pink / blue");
+            var pride = ColorSchemes.Get("Rainbow Pride");
+            Check(pride.Gradient(0).ToHex() == "#750787" && pride.Gradient(255).ToHex() == "#E40303",
+                "Rainbow Pride: violet at the start of the fill, red at the top (reads like the flag)");
+            var stops = ColorSchemes.BarStops(pride, 16);
+            Check(stops.Count == 12 && stops.Zip(stops.Skip(1), (a, b) => b.t > a.t).All(x => x) && stops[0].t == 0 && Math.Abs(stops[stops.Count - 1].t - 1) < 1e-9,
+                "flag gradient stops are hard-edged and strictly increasing (GDI+ requirement)");
+            Check(ColorSchemes.Names.Distinct().Count() == ColorSchemes.Names.Count && ColorSchemes.Names.Count == 19, $"{ColorSchemes.Names.Count} uniquely named schemes");
+            Check(Rgb.TryParseHex("#1a2B3c", out var parsed) && parsed.ToHex() == "#1A2B3C" && !Rgb.TryParseHex("red", out _), "hex colors parse and format");
+
+            Console.WriteLine("Frequency palettes");
+            foreach (var palette in FrequencyPalettes.All)
+                Console.WriteLine($"    {palette.Name,-13} 50 Hz {palette.ColorFor(50).ToHex()}  300 Hz {palette.ColorFor(300).ToHex()}  2 kHz {palette.ColorFor(2000).ToHex()}");
+            Check(FrequencyPalettes.Get("Classic").ColorFor(50).ToHex() == "#FF0400" && FrequencyPalettes.Get("Classic").ColorFor(2000).ToHex() == "#DD00DD",
+                "Classic matches the LED sketch (red low, purple high)");
+            Check(FrequencyPalettes.Get("Spectrum").ColorFor(50).ToHex() == "#FF0000", "Spectrum starts red");
+            Check(FrequencyPalettes.Get("Heat").ColorFor(9999).ToHex() == "#FFFFFF" && FrequencyPalettes.Get("Heat").ColorFor(1).ToHex() == "#7A0000",
+                "out-of-range frequencies clamp to the palette ends");
+
+            Console.WriteLine("Placement migration");
+            var legacy = new AppSettings { LegacyBarLength = 94, TopMargin = AppSettings.Unset, BottomMargin = AppSettings.Unset };
+            legacy.MigrateLength(1440);
+            Check(legacy.TopMargin == 43 && legacy.BottomMargin == 43 && legacy.LegacyBarLength == 0, $"old 94% length on 1440 px -> top/bottom {legacy.TopMargin}/{legacy.BottomMargin} px");
+            var brandNew = new AppSettings();
+            brandNew.MigrateLength(1080);
+            Check(brandNew.TopMargin == 180 && brandNew.BottomMargin == 180, "fresh install defaults to 180 px gaps");
+            var kept = new AppSettings { TopMargin = 10, BottomMargin = 60 };
+            kept.MigrateLength(1440);
+            Check(kept.TopMargin == 10 && kept.BottomMargin == 60, "existing gaps are left alone");
+
             Console.WriteLine("Config (a copy of your real settings)");
             var real = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SoundRadarDesktop");
             var copy = Environment.GetEnvironmentVariable("SOUNDRADAR_CONFIG_DIR");
@@ -80,12 +113,25 @@ namespace SoundRadar.Probe
                 File.Copy(file, Path.Combine(copy, Path.GetFileName(file)), true);
             var settings = ConfigStore.LoadSettings();
             var profile = ConfigStore.LoadProfile(settings.CurrentProfile);
-            Console.WriteLine($"    settings: source={settings.Source} monitor='{settings.Monitor}' width={settings.BarWidth} length={settings.BarLength} margin={settings.EdgeMargin} hotkeys={settings.Hotkeys.Count(h => h.Value != "")}/{settings.Hotkeys.Count} bound");
+            settings.MigrateLength(1440);
+            Console.WriteLine($"    settings: source={settings.Source} monitor='{settings.Monitor}' width={settings.BarWidth} top={settings.TopMargin} bottom={settings.BottomMargin} side={settings.EdgeMargin} hotkeys={settings.Hotkeys.Count(h => h.Value != "")}/{settings.Hotkeys.Count} bound");
             Console.WriteLine($"    profile {settings.CurrentProfile}: color={profile.Color} mode={profile.Mode} brightness={profile.Brightness} bg={profile.BackgroundOpacity} sens={profile.Sensitivity:0.0} auto={profile.AutoSensitivity} segments={profile.Segments}");
             Check(settings.Hotkeys.Count == HotkeyActions.Labels.Count, "all hotkey actions present after load");
+            profile.Name = "  Valorant  ";
+            profile.FrequencyPalette = "Ocean";
+            profile.BackgroundColor = "#123abc";
+            profile.Normalize();
             ConfigStore.SaveProfile(8, profile);
             var reloaded = ConfigStore.LoadProfile(8);
-            Check(reloaded.Color == profile.Color && reloaded.Brightness == profile.Brightness && reloaded.Segments == profile.Segments, "profile save/load round trip");
+            Check(reloaded.Color == profile.Color && reloaded.Brightness == profile.Brightness && reloaded.Segments == profile.Segments
+                  && reloaded.Name == "Valorant" && reloaded.FrequencyPalette == "Ocean" && reloaded.BackgroundColor == "#123ABC",
+                "profile save/load round trip (incl. name, palette, background color)");
+            ConfigStore.SaveSettings(settings);
+            var settingsJson = File.ReadAllText(Path.Combine(copy, "settings.json"));
+            Check(settingsJson.Contains("top_margin") && !settingsJson.Contains("bar_length"), "settings save gaps and drop the old length");
+            File.WriteAllText(Path.Combine(copy, "profile-5.json"), "{\"background_color\": \"not a color\", \"frequency_palette\": \"Nope\"}");
+            var bad = ConfigStore.LoadProfile(5);
+            Check(bad.BackgroundColor == "#000000" && bad.FrequencyPalette == "Classic", "invalid color/palette fall back to defaults");
             var fresh = ConfigStore.LoadProfile(7); // never written
             Check(fresh.Brightness == 90 && fresh.AutoSensitivity && fresh.Segments == 21, "missing profile falls back to defaults");
             File.WriteAllText(Path.Combine(copy, "profile-6.json"), "{\"color\": \"Blue\"}");

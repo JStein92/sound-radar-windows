@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -50,9 +52,14 @@ namespace SoundRadar.Overlay
         public string Mode = "Bottom";
         public int Segments = 21;
         public double Opacity = 0.9;
-        public double BackgroundOpacity; // dark backing so bars show on bright screens
+        public double BackgroundOpacity; // backing so bars show on bright screens
+        public Rgb BackgroundColor = new Rgb(0, 0, 0);
 
         public Rectangle Bounds => _outer;
+
+        // Flags are laid out so a bar filling upward reads like the flag; when filling from
+        // the top down, flip them so they aren't upside down.
+        private bool FlipStripes => Mode == "Top" && !SolidColor.HasValue && ColorSchemes.Get(ColorName).IsFlag;
 
         private static void EnsureClass()
         {
@@ -72,16 +79,26 @@ namespace SoundRadar.Overlay
             _classRegistered = true;
         }
 
-        /// <summary>Anchor to a screen edge. Width and margin are in pixels at 100% scaling.</summary>
-        public void Place(Rectangle screen, int width, int lengthPercent, int margin)
+        /// <summary>Anchor to a screen edge. All sizes are in pixels at 100% scaling.</summary>
+        public void Place(Rectangle screen, int width, int topGap, int bottomGap, int sideGap)
         {
             _scale = Native.MonitorScale(screen);
             var barWidth = Math.Max(1, (int)Math.Round(width * _scale));
-            var edgeGap = (int)Math.Round(margin * _scale);
-            var length = Math.Max(20, screen.Height * lengthPercent / 100);
-            var y = screen.Top + (screen.Height - length) / 2;
+            var edgeGap = (int)Math.Round(sideGap * _scale);
+            var top = (int)Math.Round(topGap * _scale);
+            var bottom = (int)Math.Round(bottomGap * _scale);
+            // Keep a usable bar even if the gaps are larger than this screen allows.
+            var minLength = (int)Math.Round(40 * _scale);
+            var overflow = minLength - (screen.Height - top - bottom);
+            if (overflow > 0)
+            {
+                var trimTop = Math.Min(top, (overflow + 1) / 2);
+                top -= trimTop;
+                bottom = Math.Max(0, bottom - (overflow - trimTop));
+            }
+            var length = Math.Max(minLength, screen.Height - top - bottom);
             var x = IsLeft ? screen.Left + edgeGap : screen.Right - edgeGap - barWidth;
-            var bar = new Rectangle(x, y, barWidth, length);
+            var bar = new Rectangle(x, screen.Top + top, barWidth, length);
 
             // The window extends past the bar so the background can frame it; clip to this
             // screen so the padding never spills onto a neighbouring monitor.
@@ -176,7 +193,8 @@ namespace SoundRadar.Overlay
 
             if (BackgroundOpacity > 0)
             {
-                using (var brush = new SolidBrush(Color.FromArgb((int)Math.Round(255 * BackgroundOpacity), 0, 0, 0)))
+                using (var brush = new SolidBrush(Color.FromArgb((int)Math.Round(255 * BackgroundOpacity),
+                           BackgroundColor.R, BackgroundColor.G, BackgroundColor.B)))
                     FillRounded(g, brush, 0, 0, _outer.Width, _outer.Height, (float)Math.Min(_outer.Width / 2.0, 5 * _scale));
             }
 
@@ -262,20 +280,28 @@ namespace SoundRadar.Overlay
             var lit = Math.Abs(far - origin);
             if (lit < 0.5f)
                 return;
-            var blend = new ColorBlend(SmoothGradientStops + 1)
+            var scheme = ColorSchemes.Get(ColorName);
+            List<(double t, Rgb color)> stops;
+            if (SolidColor.HasValue || scheme.Gradient == null)
+                stops = new List<(double, Rgb)> { (0, SolidColor ?? default), (1, SolidColor ?? default) };
+            else
+                stops = ColorSchemes.BarStops(scheme, SmoothGradientStops); // hard-edged for flags
+            if (FlipStripes)
+                stops = stops.Select(s => (1 - s.t, s.color)).Reverse().ToList();
+
+            var alpha = (int)Math.Round(255 * Math.Max(0, Math.Min(1, Opacity)));
+            if (!SolidColor.HasValue && scheme.Gradient == null)
+                alpha = 0; // Frequency before its first color arrives
+            var blend = new ColorBlend(stops.Count)
             {
-                Colors = new Color[SmoothGradientStops + 1],
-                Positions = new float[SmoothGradientStops + 1],
+                Colors = stops.Select(s => Color.FromArgb(alpha, s.color.R, s.color.G, s.color.B)).ToArray(),
+                Positions = stops.Select(s => (float)s.t).ToArray(),
             };
-            for (var step = 0; step <= SmoothGradientStops; step++)
-            {
-                var t = step / (float)SmoothGradientStops;
-                blend.Positions[step] = t;
-                blend.Colors[step] = ColorAt(t * 255, Opacity);
-            }
+            blend.Positions[0] = 0;
+            blend.Positions[blend.Positions.Length - 1] = 1;
             var start = new PointF(0, origin);
             var end = new PointF(0, origin + direction * length);
-            using (var brush = new LinearGradientBrush(start, end, blend.Colors[0], blend.Colors[SmoothGradientStops]))
+            using (var brush = new LinearGradientBrush(start, end, blend.Colors[0], blend.Colors[blend.Colors.Length - 1]))
             {
                 brush.InterpolationColors = blend;
                 brush.WrapMode = WrapMode.TileFlipXY; // avoids a seam on the first/last pixel
@@ -292,9 +318,11 @@ namespace SoundRadar.Overlay
             }
             else
             {
-                var gradient = ColorSchemes.Gradient(ColorName);
+                var gradient = ColorSchemes.Get(ColorName).Gradient;
                 if (gradient == null)
                     return Color.Transparent; // Frequency before its first color arrives
+                if (FlipStripes)
+                    pos = 255 - pos;
                 rgb = gradient((int)Math.Max(0, Math.Min(255, pos)));
             }
             var a = (int)Math.Round(255 * Math.Max(0, Math.Min(1, alpha)));

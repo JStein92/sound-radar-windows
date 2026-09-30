@@ -26,24 +26,29 @@ namespace SoundRadar.UI
         public override string ToString() => Label;
     }
 
-    internal sealed class ColorChoice
+    /// <summary>A named item with a horizontal gradient swatch (color schemes, frequency palettes).</summary>
+    internal sealed class SwatchChoice
     {
-        public ColorChoice(string name)
+        public SwatchChoice(string name, IEnumerable<(double t, Rgb color)> stops)
         {
             Name = name;
             var brush = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
-            const int stops = 24;
-            for (var i = 0; i <= stops; i++)
-            {
-                var rgb = ColorSchemes.Preview(name, i * 255 / stops);
-                brush.GradientStops.Add(new GradientStop(Color.FromRgb(rgb.R, rgb.G, rgb.B), i / (double)stops));
-            }
+            foreach (var (t, rgb) in stops)
+                brush.GradientStops.Add(new GradientStop(Color.FromRgb(rgb.R, rgb.G, rgb.B), t));
             brush.Freeze();
             Swatch = brush;
         }
 
         public string Name { get; }
         public Brush Swatch { get; }
+        public override string ToString() => Name; // what screen readers announce
+    }
+
+    /// <summary>Lets a WinForms dialog be owned by a WPF window.</summary>
+    internal sealed class Win32Owner : Forms.IWin32Window
+    {
+        public Win32Owner(Window window) => Handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        public IntPtr Handle { get; }
     }
 
     internal partial class ControlPanel : Window
@@ -65,6 +70,8 @@ namespace SoundRadar.UI
         private readonly Controller _c;
         private readonly DispatcherTimer _liveTimer;
         private bool _syncing;
+        private string _colorItemsPalette; // palette the Frequency swatch was drawn with
+        private int[] _customColors; // the color dialog's custom swatches, kept for this session
 
         public ControlPanel(Controller controller)
         {
@@ -77,10 +84,11 @@ namespace SoundRadar.UI
             Icon = App.LoadImageSource();
             SourceInitialized += (s, e) => Interop.Native.UseDarkTitleBar(this);
 
-            ProfileCombo.ItemsSource = Enumerable.Range(1, ConfigStore.ProfileCount).Select(i => $"Profile {i}").ToList();
             SourceCombo.ItemsSource = SourceChoices;
             ModeCombo.ItemsSource = ModeChoices;
-            ColorCombo.ItemsSource = ColorSchemes.Names.Select(n => new ColorChoice(n)).ToList();
+            PaletteCombo.ItemsSource = FrequencyPalettes.All
+                .Select(p => new SwatchChoice(p.Name, Enumerable.Range(0, 25).Select(i => (i / 24.0, p.ColorAt(i / 24.0)))))
+                .ToList();
 
             _liveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _liveTimer.Tick += (s, e) => RefreshLive();
@@ -103,6 +111,7 @@ namespace SoundRadar.UI
             _syncing = true;
             try
             {
+                ProfileCombo.ItemsSource = Enumerable.Range(0, ConfigStore.ProfileCount).Select(_c.ProfileDisplayName).ToList();
                 ProfileCombo.SelectedIndex = s.CurrentProfile;
                 PowerToggle.IsChecked = s.Enabled;
                 PowerToggle.Content = s.Enabled ? "On" : "Off";
@@ -118,15 +127,28 @@ namespace SoundRadar.UI
                 QuietBoostCheck.IsChecked = p.QuietBoost;
                 RadarCheck.IsChecked = p.ShowDifference;
 
+                if (_colorItemsPalette != p.FrequencyPalette)
+                {
+                    // The Frequency item's swatch shows the chosen palette.
+                    var palette = FrequencyPalettes.Get(p.FrequencyPalette);
+                    ColorCombo.ItemsSource = ColorSchemes.All.Select(sc => new SwatchChoice(sc.Name, ColorSchemes.SwatchStops(sc, palette))).ToList();
+                    _colorItemsPalette = p.FrequencyPalette;
+                }
                 ColorCombo.SelectedIndex = Math.Max(0, ColorSchemes.Names.ToList().IndexOf(p.Color));
+                var isFrequency = p.Color == ColorSchemes.Frequency;
+                PaletteLabel.Visibility = PaletteCombo.Visibility = isFrequency ? Visibility.Visible : Visibility.Collapsed;
+                PaletteCombo.SelectedIndex = Math.Max(0, FrequencyPalettes.Names.ToList().IndexOf(p.FrequencyPalette));
                 ModeCombo.SelectedItem = ModeChoices.FirstOrDefault(c => c.Key == p.Mode) ?? ModeChoices[0];
                 SegmentsSlider.Value = p.Segments;
                 BrightnessSlider.Value = p.Brightness;
                 BackgroundSlider.Value = p.BackgroundOpacity;
+                var background = Rgb.FromHex(p.BackgroundColor);
+                BackgroundSwatch.Background = new SolidColorBrush(Color.FromRgb(background.R, background.G, background.B));
 
                 FillMonitors();
                 WidthSlider.Value = s.BarWidth;
-                LengthSlider.Value = s.BarLength;
+                TopSlider.Value = s.TopMargin;
+                BottomSlider.Value = s.BottomMargin;
                 MarginSlider.Value = s.EdgeMargin;
                 AutostartCheck.IsChecked = Autostart.IsEnabled;
             }
@@ -147,7 +169,8 @@ namespace SoundRadar.UI
             BrightnessValue.Text = $"{BrightnessSlider.Value:0}%";
             BackgroundValue.Text = $"{BackgroundSlider.Value:0}%";
             WidthValue.Text = $"{WidthSlider.Value:0} px";
-            LengthValue.Text = $"{LengthSlider.Value:0}%";
+            TopValue.Text = $"{TopSlider.Value:0} px";
+            BottomValue.Text = $"{BottomSlider.Value:0} px";
             MarginValue.Text = $"{MarginSlider.Value:0} px";
         }
 
@@ -212,6 +235,14 @@ namespace SoundRadar.UI
         {
             if (!_syncing && ProfileCombo.SelectedIndex >= 0)
                 _c.SelectProfile(ProfileCombo.SelectedIndex);
+        }
+
+        private void OnRenameProfile(object sender, RoutedEventArgs e)
+        {
+            var index = _c.Settings.CurrentProfile;
+            var dialog = new RenameDialog(_c.ProfileDisplayName(index), $"Profile {index + 1}", Profile.MaxNameLength) { Owner = this };
+            if (dialog.ShowDialog() == true)
+                _c.RenameProfile(index, dialog.NewName == $"Profile {index + 1}" ? "" : dialog.NewName);
         }
 
         private void OnPowerClick(object sender, RoutedEventArgs e) => _c.RunAction("toggle_on_off");
@@ -279,8 +310,44 @@ namespace SoundRadar.UI
 
         private void OnColorChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (!_syncing && ColorCombo.SelectedItem is ColorChoice choice)
-                _c.ChangeProfile(p => p.Color = choice.Name);
+            if (_syncing || !(ColorCombo.SelectedItem is SwatchChoice choice))
+                return;
+            _c.ChangeProfile(p => p.Color = choice.Name);
+            var isFrequency = choice.Name == ColorSchemes.Frequency;
+            PaletteLabel.Visibility = PaletteCombo.Visibility = isFrequency ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void OnPaletteChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_syncing || !(PaletteCombo.SelectedItem is SwatchChoice choice))
+                return;
+            _c.ChangeProfile(p => p.FrequencyPalette = choice.Name);
+            Sync(); // redraw the Frequency swatch in the color list
+        }
+
+        private void OnPickBackgroundColor(object sender, RoutedEventArgs e)
+        {
+            var current = Rgb.FromHex(_c.Profile.BackgroundColor);
+            using (var dialog = new Forms.ColorDialog
+            {
+                Color = System.Drawing.Color.FromArgb(current.R, current.G, current.B),
+                FullOpen = true,
+                AnyColor = true,
+                CustomColors = _customColors ?? new int[0],
+            })
+            {
+                if (dialog.ShowDialog(new Win32Owner(this)) != Forms.DialogResult.OK)
+                    return;
+                _customColors = dialog.CustomColors;
+                var picked = new Rgb(dialog.Color.R, dialog.Color.G, dialog.Color.B);
+                _c.ChangeProfile(p =>
+                {
+                    p.BackgroundColor = picked.ToHex();
+                    if (p.BackgroundOpacity == 0)
+                        p.BackgroundOpacity = 50; // picking a color at 0% would look like nothing happened
+                });
+                Sync();
+            }
         }
 
         private void OnPrevColor(object sender, RoutedEventArgs e) => _c.RunAction("switch_color_left");
@@ -327,11 +394,18 @@ namespace SoundRadar.UI
                 _c.ChangeSettings(s => s.BarWidth = (int)e.NewValue);
         }
 
-        private void OnLengthChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void OnTopChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             UpdateValueLabels();
             if (!_syncing)
-                _c.ChangeSettings(s => s.BarLength = (int)e.NewValue);
+                _c.ChangeSettings(s => s.TopMargin = (int)e.NewValue);
+        }
+
+        private void OnBottomChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            UpdateValueLabels();
+            if (!_syncing)
+                _c.ChangeSettings(s => s.BottomMargin = (int)e.NewValue);
         }
 
         private void OnMarginChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

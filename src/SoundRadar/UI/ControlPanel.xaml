@@ -1,13 +1,13 @@
 <Window x:Class="SoundRadar.UI.ControlPanel" x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SoundRadar" Width="450" SizeToContent="Height" ResizeMode="CanMinimize"
+        Title="SoundRadar" Width="880" SizeToContent="Height" ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen" Background="{StaticResource WindowBg}"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
 
     <Window.Resources>
-        <!-- Swatch + name for the color picker. -->
-        <DataTemplate x:Key="ColorItem">
+        <!-- Swatch + name, used by the color and frequency palette pickers. -->
+        <DataTemplate x:Key="SwatchItem">
             <StackPanel Orientation="Horizontal">
                 <Rectangle Width="72" Height="14" RadiusX="2" RadiusY="2" Fill="{Binding Swatch}" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding Name}" Margin="10,0,0,0" />
@@ -17,136 +17,169 @@
 
     <StackPanel Margin="16,14,16,14">
 
-        <!-- Header: profile + power -->
+        <!-- Header: profile, rename, power -->
         <Grid>
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <ComboBox x:Name="ProfileCombo" SelectionChanged="OnProfileChanged" />
-            <ToggleButton x:Name="PowerToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource PowerToggle}"
+            <Button Grid.Column="1" Margin="8,0,0,0" Content="&#x270E; Rename" Click="OnRenameProfile" ToolTip="Rename this profile" />
+            <ToggleButton x:Name="PowerToggle" Grid.Column="3" Style="{StaticResource PowerToggle}"
                           Content="On" Click="OnPowerClick" ToolTip="Show or hide the bars" />
         </Grid>
 
-        <!-- Audio source -->
-        <GroupBox Header="Audio source">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left column: what to listen to and how the bars respond -->
             <StackPanel>
-                <ComboBox x:Name="SourceCombo" SelectionChanged="OnSourceChanged" />
-                <Grid x:Name="AppRow" Margin="0,8,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <ComboBox x:Name="AppCombo" IsEditable="True" ToolTip="The game's .exe name - pick it while the game is making sound"
-                              DropDownClosed="OnAppCommitted" LostKeyboardFocus="OnAppCommitted" KeyDown="OnAppKeyDown" />
-                    <Button Grid.Column="1" Margin="8,0,0,0" Content="Refresh" Click="OnRefreshApps"
-                            ToolTip="List apps that currently have audio open" />
-                </Grid>
-                <TextBlock x:Name="StatusText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource OkFg}" />
-                <TextBlock x:Name="MonoText" Margin="0,4,0,0" Style="{StaticResource Hint}" />
+                <GroupBox Header="Audio source">
+                    <StackPanel>
+                        <ComboBox x:Name="SourceCombo" SelectionChanged="OnSourceChanged" />
+                        <Grid x:Name="AppRow" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="AppCombo" IsEditable="True" ToolTip="The game's .exe name - pick it while the game is making sound"
+                                      DropDownClosed="OnAppCommitted" LostKeyboardFocus="OnAppCommitted" KeyDown="OnAppKeyDown" />
+                            <Button Grid.Column="1" Margin="8,0,0,0" Content="Refresh" Click="OnRefreshApps"
+                                    ToolTip="List apps that currently have audio open" />
+                        </Grid>
+                        <TextBlock x:Name="StatusText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource OkFg}" />
+                        <TextBlock x:Name="MonoText" Margin="0,4,0,0" Style="{StaticResource Hint}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Response">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sensitivity" />
+                            <Slider x:Name="SensitivitySlider" Grid.Column="1" Minimum="0" Maximum="100" ValueChanged="OnSensitivityChanged" />
+                            <TextBlock x:Name="SensitivityValue" Grid.Column="2" Style="{StaticResource Value}" />
+                        </Grid>
+                        <CheckBox x:Name="AutoSensitivityCheck" Margin="92,4,0,4" Content="Auto sensitivity" Click="OnAutoSensitivityClick" />
+                        <CheckBox x:Name="QuietBoostCheck" Content="Boost quiet sounds (decibel scale)" Click="OnQuietBoostClick"
+                                  ToolTip="Footsteps and other quiet sounds still move the bars next to loud ones." />
+                        <CheckBox x:Name="RadarCheck" Content="Radar - only light the louder side, by how much louder" Click="OnRadarClick" />
+                    </StackPanel>
+                </GroupBox>
             </StackPanel>
-        </GroupBox>
 
-        <!-- Response -->
-        <GroupBox Header="Response">
-            <StackPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="92" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Sensitivity" />
-                    <Slider x:Name="SensitivitySlider" Grid.Column="1" Minimum="0" Maximum="100" ValueChanged="OnSensitivityChanged" />
-                    <TextBlock x:Name="SensitivityValue" Grid.Column="2" Style="{StaticResource Value}" />
-                </Grid>
-                <CheckBox x:Name="AutoSensitivityCheck" Margin="92,4,0,4" Content="Auto sensitivity" Click="OnAutoSensitivityClick" />
-                <CheckBox x:Name="QuietBoostCheck" Content="Boost quiet sounds (decibel scale)" Click="OnQuietBoostClick"
-                          ToolTip="Footsteps and other quiet sounds still move the bars next to loud ones." />
-                <CheckBox x:Name="RadarCheck" Content="Radar - only light the louder side, by how much louder" Click="OnRadarClick" />
+            <!-- Right column: how the bars look and where they sit -->
+            <StackPanel Grid.Column="2">
+                <GroupBox Header="Look">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Color" />
+                        <Grid Grid.Column="1" Grid.ColumnSpan="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Button Content="&#x25C0;" Padding="8,4" FontSize="10" Click="OnPrevColor" ToolTip="Previous color" />
+                            <ComboBox x:Name="ColorCombo" Grid.Column="1" Margin="6,0" ItemTemplate="{StaticResource SwatchItem}"
+                                      MaxDropDownHeight="640" SelectionChanged="OnColorChanged" />
+                            <Button Grid.Column="2" Content="&#x25B6;" Padding="8,4" FontSize="10" Click="OnNextColor" ToolTip="Next color" />
+                        </Grid>
+
+                        <TextBlock x:Name="PaletteLabel" Grid.Row="1" Text="Frequency" Margin="0,8,0,0" />
+                        <ComboBox x:Name="PaletteCombo" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                                  ItemTemplate="{StaticResource SwatchItem}" SelectionChanged="OnPaletteChanged"
+                                  ToolTip="Colors from lowest (left) to highest (right) pitch" />
+
+                        <TextBlock Grid.Row="2" Text="Mode" Margin="0,8,0,0" />
+                        <ComboBox x:Name="ModeCombo" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" SelectionChanged="OnModeChanged" />
+
+                        <TextBlock Grid.Row="3" Text="Segments" Margin="0,8,0,0" />
+                        <Slider x:Name="SegmentsSlider" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="60"
+                                ValueChanged="OnSegmentsChanged" ToolTip="0 = one smooth bar; otherwise an LED-strip look" />
+                        <TextBlock x:Name="SegmentsValue" Grid.Row="3" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
+
+                        <TextBlock Grid.Row="4" Text="Brightness" Margin="0,8,0,0" />
+                        <Slider x:Name="BrightnessSlider" Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Minimum="5" Maximum="100"
+                                ValueChanged="OnBrightnessChanged" />
+                        <TextBlock x:Name="BrightnessValue" Grid.Row="4" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
+
+                        <TextBlock Grid.Row="5" Text="Background" Margin="0,8,0,0" />
+                        <Slider x:Name="BackgroundSlider" Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="100"
+                                ValueChanged="OnBackgroundChanged" ToolTip="Backing behind each bar, so they stay visible on bright screens." />
+                        <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,8,0,0" Orientation="Horizontal">
+                            <TextBlock x:Name="BackgroundValue" Style="{StaticResource Value}" Width="44" />
+                            <Button x:Name="BackgroundColorButton" Margin="8,0,0,0" Padding="4" Click="OnPickBackgroundColor"
+                                    ToolTip="Background color">
+                                <Border x:Name="BackgroundSwatch" Width="18" Height="14" CornerRadius="2" BorderBrush="#808080" BorderThickness="1" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Placement (all profiles)">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Monitor" />
+                        <ComboBox x:Name="MonitorCombo" Grid.Column="1" Grid.ColumnSpan="2" SelectionChanged="OnMonitorChanged" />
+
+                        <TextBlock Grid.Row="1" Text="Width" Margin="0,8,0,0" />
+                        <Slider x:Name="WidthSlider" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Minimum="2" Maximum="80" ValueChanged="OnWidthChanged" />
+                        <TextBlock x:Name="WidthValue" Grid.Row="1" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
+
+                        <TextBlock Grid.Row="2" Text="Top gap" Margin="0,8,0,0" />
+                        <Slider x:Name="TopSlider" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="800"
+                                ValueChanged="OnTopChanged" ToolTip="Distance from the top of the screen" />
+                        <TextBlock x:Name="TopValue" Grid.Row="2" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
+
+                        <TextBlock Grid.Row="3" Text="Bottom gap" Margin="0,8,0,0" />
+                        <Slider x:Name="BottomSlider" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="800"
+                                ValueChanged="OnBottomChanged" ToolTip="Distance from the bottom of the screen (e.g. to clear the taskbar)" />
+                        <TextBlock x:Name="BottomValue" Grid.Row="3" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
+
+                        <TextBlock Grid.Row="4" Text="Side gap" Margin="0,8,0,0" />
+                        <Slider x:Name="MarginSlider" Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="300"
+                                ValueChanged="OnMarginChanged" ToolTip="Distance from the left/right edge of the screen" />
+                        <TextBlock x:Name="MarginValue" Grid.Row="4" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
+                    </Grid>
+                </GroupBox>
             </StackPanel>
-        </GroupBox>
-
-        <!-- Look (per profile) -->
-        <GroupBox Header="Look">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="92" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="Color" />
-                <Grid Grid.Column="1" Grid.ColumnSpan="2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Button Content="&#x25C0;" Padding="8,4" FontSize="10" Click="OnPrevColor" ToolTip="Previous color" />
-                    <ComboBox x:Name="ColorCombo" Grid.Column="1" Margin="6,0" ItemTemplate="{StaticResource ColorItem}"
-                              SelectionChanged="OnColorChanged" />
-                    <Button Grid.Column="2" Content="&#x25B6;" Padding="8,4" FontSize="10" Click="OnNextColor" ToolTip="Next color" />
-                </Grid>
-
-                <TextBlock Grid.Row="1" Text="Mode" Margin="0,8,0,0" />
-                <ComboBox x:Name="ModeCombo" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" SelectionChanged="OnModeChanged" />
-
-                <TextBlock Grid.Row="2" Text="Segments" Margin="0,8,0,0" />
-                <Slider x:Name="SegmentsSlider" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="60"
-                        ValueChanged="OnSegmentsChanged" ToolTip="0 = one smooth bar; otherwise an LED-strip look" />
-                <TextBlock x:Name="SegmentsValue" Grid.Row="2" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
-
-                <TextBlock Grid.Row="3" Text="Brightness" Margin="0,8,0,0" />
-                <Slider x:Name="BrightnessSlider" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Minimum="5" Maximum="100"
-                        ValueChanged="OnBrightnessChanged" />
-                <TextBlock x:Name="BrightnessValue" Grid.Row="3" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
-
-                <TextBlock Grid.Row="4" Text="Background" Margin="0,8,0,0" />
-                <Slider x:Name="BackgroundSlider" Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="100"
-                        ValueChanged="OnBackgroundChanged" ToolTip="Dark backing behind each bar, so they stay visible on bright screens." />
-                <TextBlock x:Name="BackgroundValue" Grid.Row="4" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
-            </Grid>
-        </GroupBox>
-
-        <!-- Placement (all profiles) -->
-        <GroupBox Header="Placement (all profiles)">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="92" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="Monitor" />
-                <ComboBox x:Name="MonitorCombo" Grid.Column="1" Grid.ColumnSpan="2" SelectionChanged="OnMonitorChanged" />
-
-                <TextBlock Grid.Row="1" Text="Width" Margin="0,8,0,0" />
-                <Slider x:Name="WidthSlider" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Minimum="2" Maximum="80" ValueChanged="OnWidthChanged" />
-                <TextBlock x:Name="WidthValue" Grid.Row="1" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
-
-                <TextBlock Grid.Row="2" Text="Length" Margin="0,8,0,0" />
-                <Slider x:Name="LengthSlider" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Minimum="10" Maximum="100" ValueChanged="OnLengthChanged" />
-                <TextBlock x:Name="LengthValue" Grid.Row="2" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
-
-                <TextBlock Grid.Row="3" Text="Edge gap" Margin="0,8,0,0" />
-                <Slider x:Name="MarginSlider" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Minimum="0" Maximum="300" ValueChanged="OnMarginChanged" />
-                <TextBlock x:Name="MarginValue" Grid.Row="3" Grid.Column="2" Margin="0,8,0,0" Style="{StaticResource Value}" />
-            </Grid>
-        </GroupBox>
+        </Grid>
 
         <!-- Footer -->
         <Grid Margin="0,12,0,0">
@@ -154,13 +187,14 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Button Content="Hotkeys..." Click="OnHotkeys" />
             <Button Grid.Column="1" Content="Restart audio" Margin="8,0,0,0" Click="OnRestartAudio" ToolTip="Reconnect to the audio source" />
-            <CheckBox x:Name="AutostartCheck" Grid.Column="2" HorizontalAlignment="Right" Content="Start with Windows"
+            <TextBlock Grid.Column="2" Margin="16,0" Style="{StaticResource Hint}"
+                       Text="Overlays show over borderless / windowed games, not exclusive fullscreen." />
+            <CheckBox x:Name="AutostartCheck" Grid.Column="3" Content="Start with Windows"
                       Click="OnAutostartClick" ToolTip="Start in the tray when you sign in" />
         </Grid>
-        <TextBlock Margin="0,8,0,0" Style="{StaticResource Hint}"
-                   Text="Overlays show over borderless / windowed games, not exclusive fullscreen." />
     </StackPanel>
 </Window>
